@@ -1,0 +1,26 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "run_hf_mlm",
+            "type": "python",
+            "request": "launch",
+            "program": "run_hf_mlm.py",
+            "args": [
+                "--config", "configs/glom/config.json",
+                "--model_type", "glom",
+                "--tokenizer", "albert-base-v2",
+                "--dataset_name", "wikitext",
+                "--dataset_config_name", "wikitext-2-raw-v1",
+                "--do_train",
+                "--do_eval",
+                "--output_dir", "train/test-mlm",
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+    ]
+}
