@@ -339,14 +339,19 @@ def main():
     }
 
     if model_args.config_name:
-        if "glom" in model_args.config_name:
+        if model_args.model_type == "glom":
             config = GlomConfig.from_pretrained(model_args.config_name, **config_kwargs)
         else:
             config = AutoConfig.from_pretrained(model_args.config_name, **config_kwargs)
     elif model_args.model_name_or_path:
-        config = AutoConfig.from_pretrained(
-            model_args.model_name_or_path, **config_kwargs
-        )
+        if model_args.model_type == "glom":
+            config = GlomConfig.from_pretrained(
+                model_args.model_name_or_path, **config_kwargs
+            )
+        else:
+            config = AutoConfig.from_pretrained(
+                model_args.model_name_or_path, **config_kwargs
+            )
     else:
         CONFIG_MAPPING["glom"] = GlomConfig
         config = CONFIG_MAPPING[model_args.model_type]()
@@ -364,13 +369,15 @@ def main():
         )
     elif model_args.model_name_or_path:
         tokenizer = AutoTokenizer.from_pretrained(
-            model_args.model_name_or_path, **tokenizer_kwargs
+            model_args.model_name_or_path, config=config, **tokenizer_kwargs
         )
     else:
         raise ValueError(
             "You are instantiating a new tokenizer from scratch. This is not supported by this script."
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
+    if config.tokenizer_class is None:
+        config.tokenizer_class = type(tokenizer).__name__
 
     if isinstance(config, GlomConfig):
         model_cls = GlomForMaskedLM
@@ -560,6 +567,26 @@ def main():
                 for key, value in sorted(results.items()):
                     logger.info(f"  {key} = {value}")
                     writer.write(f"{key} = {value}\n")
+
+    # Prediction
+    results = {}
+    if training_args.do_predict:
+        logger.info("*** Prediction ***")
+
+        output = trainer.predict(test_dataset=trainer.eval_dataset)
+
+        # perplexity = math.exp(eval_output["eval_loss"])
+        # results["perplexity"] = perplexity
+
+        output_eval_file = os.path.join(
+            training_args.output_dir, "prediction_results_glom.txt"
+        )
+        if trainer.is_world_process_zero():
+            with open(output_eval_file, "w") as writer:
+                logger.info("***** Prediction results *****")
+                # for key, value in sorted(results.items()):
+                #    logger.info(f"  {key} = {value}")
+                #    writer.write(f"{key} = {value}\n")
 
     return results
 
