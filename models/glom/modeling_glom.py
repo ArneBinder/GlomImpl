@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""PyTorch ALBERT model. """
+"""PyTorch GLOM model. """
 
 import math
 import os
@@ -284,12 +284,33 @@ class GlomAttention(nn.Module):
         self.attention_head_size = config.hidden_size // config.num_attention_heads
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        self.query = nn.Linear(config.hidden_size, self.all_head_size)
-        self.key = nn.Linear(config.hidden_size, self.all_head_size)
-        self.value = nn.Linear(config.hidden_size, self.all_head_size)
+        self.head_projections = nn.ModuleList(
+            [
+                nn.Linear(
+                    config.hidden_size // config.num_attention_heads,
+                    self.attention_head_size,
+                )
+                for _ in range(self.num_attention_heads)
+            ]
+        )
+
+        # aggregate lower, current, and higher "layer" (glom layer aka attention head)
+        sizes = [3 for _ in range(self.num_attention_heads)]
+        # first and last "layer" have no lower / higher "layer" to aggregate from
+        sizes[0] -= 1
+        sizes[-1] -= 1
+        self.aggr_projections = nn.ModuleList(
+            [
+                nn.Linear(
+                    self.attention_head_size * sizes[i], self.attention_head_size,
+                )
+                for i in range(self.num_attention_heads)
+            ]
+        )
 
         self.attention_dropout = nn.Dropout(config.attention_probs_dropout_prob)
         self.output_dropout = nn.Dropout(config.hidden_dropout_prob)
+        # TODO: only the bias of "dense" is currently used
         self.dense = nn.Linear(config.hidden_size, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.pruned_heads = set()
@@ -322,11 +343,15 @@ class GlomAttention(nn.Module):
             heads, self.num_attention_heads, self.attention_head_size, self.pruned_heads
         )
 
+        raise NotImplementedError("prune_heads not yet implemented for GlomAttention")
         # Prune linear layers
-        self.query = prune_linear_layer(self.query, index)
-        self.key = prune_linear_layer(self.key, index)
-        self.value = prune_linear_layer(self.value, index)
+        # TODO: check that!
+        for i, p in enumerate(self.head_projections):
+            self.head_projections[i] = prune_linear_layer(p, index)
         self.dense = prune_linear_layer(self.dense, index, dim=1)
+        # TODO: re-add!
+        # for i, p in enumerate(self.aggr_projections):
+        #    self.aggr_projections[i] = prune_linear_layer(p, index)
 
         # Update hyper params and store pruned heads
         self.num_attention_heads = self.num_attention_heads - len(heads)
@@ -340,13 +365,22 @@ class GlomAttention(nn.Module):
         head_mask=None,
         output_attentions=False,
     ):
-        mixed_query_layer = self.query(hidden_states)
-        mixed_key_layer = self.key(hidden_states)
-        mixed_value_layer = self.value(hidden_states)
 
-        query_layer = self.transpose_for_scores(mixed_query_layer)
-        key_layer = self.transpose_for_scores(mixed_key_layer)
-        value_layer = self.transpose_for_scores(mixed_value_layer)
+        # has format (batch, head, token, dims-per-head)
+        projected_layer_list = [
+            p(
+                hidden_states[
+                    :,
+                    :,
+                    self.attention_head_size * i : self.attention_head_size * (i + 1),
+                ]
+            )
+            for i, p in enumerate(self.head_projections)
+        ]
+        projected_layer = torch.stack(projected_layer_list, dim=1)
+        query_layer = projected_layer
+        key_layer = projected_layer
+        value_layer = projected_layer
 
         # Take the dot product between "query" and "key" to get the raw attention scores.
         attention_scores = torch.matmul(query_layer, key_layer.transpose(-1, -2))
@@ -409,18 +443,22 @@ class GlomAttention(nn.Module):
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
 
         # Should find a better way to do this
-        w = (
-            self.dense.weight.t()
-            .view(self.num_attention_heads, self.attention_head_size, self.hidden_size)
-            .to(context_layer.dtype)
-        )
         b = self.dense.bias.to(context_layer.dtype)
 
-        projected_context_layer = torch.einsum("bfnd,ndh->bfh", context_layer, w) + b
+        projected_context_layer_list = []
+        for i, p in enumerate(self.aggr_projections):
+            # integrate the lower and higher "layer" (if available)
+            x = context_layer[
+                :, :, max(i - 1, 0) : min(i + 2, self.num_attention_heads)
+            ]
+            # flatten heads
+            x = x.view(x.size()[:2] + (-1,))
+            x = p(x)
+            projected_context_layer_list.append(x)
+        projected_context_layer = torch.cat(projected_context_layer_list, dim=-1) + b
+
         projected_context_layer_dropout = self.output_dropout(projected_context_layer)
-        layernormed_context_layer = self.LayerNorm(
-            hidden_states + projected_context_layer_dropout
-        )
+        layernormed_context_layer = self.LayerNorm(projected_context_layer_dropout)
         return (
             (layernormed_context_layer, attention_probs)
             if output_attentions
@@ -462,7 +500,7 @@ class GlomLayer(nn.Module):
             self.seq_len_dim,
             attention_output[0],
         )
-        hidden_states = self.full_layer_layer_norm(ffn_output + attention_output[0])
+        hidden_states = self.full_layer_layer_norm(ffn_output)
 
         return (hidden_states,) + attention_output[
             1:
