@@ -295,7 +295,7 @@ class GlomAttention(nn.Module):
         self.attention_dropout = nn.Dropout(config.attention_probs_dropout_prob)
         self.output_dropout = nn.Dropout(config.hidden_dropout_prob)
         # TODO: only the bias of "dense" is currently used
-        self.dense = nn.Linear(config.hidden_size, config.hidden_size)
+        self.dense = nn.Linear(1, config.hidden_size)
         self.LayerNorm = nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
         self.pruned_heads = set()
 
@@ -521,8 +521,13 @@ class GlomTransformer(nn.Module):
         super().__init__()
 
         self.config = config
+        self.attention_head_size = config.hidden_size // config.num_attention_heads
         self.embedding_hidden_mapping_in = nn.Linear(
-            config.embedding_size, config.hidden_size
+            config.embedding_size, self.attention_head_size
+        )
+        # just the bias is used
+        self.step_zero_bias = nn.Linear(
+            1, config.hidden_size - self.attention_head_size
         )
         self.albert_layer_groups = nn.ModuleList(
             [GlomLayerGroup(config) for _ in range(config.num_hidden_groups)]
@@ -537,7 +542,13 @@ class GlomTransformer(nn.Module):
         output_hidden_states=False,
         return_dict=True,
     ):
-        hidden_states = self.embedding_hidden_mapping_in(hidden_states)
+        embedding_projected = self.embedding_hidden_mapping_in(hidden_states)
+        b = (
+            self.step_zero_bias.bias.to(embedding_projected.dtype)
+            .view(1, 1, -1)
+            .expand(embedding_projected.size()[:-1] + (-1,))
+        )
+        hidden_states = torch.cat([embedding_projected, b], dim=-1)
 
         all_hidden_states = (hidden_states,) if output_hidden_states else None
         all_attentions = () if output_attentions else None
@@ -976,7 +987,9 @@ class GlomMLMHead(nn.Module):
 
         self.LayerNorm = nn.LayerNorm(config.embedding_size)
         self.bias = nn.Parameter(torch.zeros(config.vocab_size))
-        self.dense = nn.Linear(config.hidden_size, config.embedding_size)
+        self.attention_head_size = config.hidden_size // config.num_attention_heads
+        # only project the lowest "layer"
+        self.dense = nn.Linear(self.attention_head_size, config.embedding_size)
         self.decoder = nn.Linear(config.embedding_size, config.vocab_size)
         self.activation = ACT2FN[config.hidden_act]
 
@@ -984,7 +997,7 @@ class GlomMLMHead(nn.Module):
         self.decoder.bias = self.bias
 
     def forward(self, hidden_states):
-        hidden_states = self.dense(hidden_states)
+        hidden_states = self.dense(hidden_states[:, :, : self.attention_head_size])
         hidden_states = self.activation(hidden_states)
         hidden_states = self.LayerNorm(hidden_states)
         hidden_states = self.decoder(hidden_states)
