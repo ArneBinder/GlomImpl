@@ -53,4 +53,4 @@ run_hf_mlm.py \
 ```
 perplexity after **12 minutes** of training (same amount of data as above): 738.9137609576597 
 
-![glom_albert_comparison](W&B_2.3.2021_04:14:07.png)
+![glom_albert_comparison](images/W&B_2.3.2021_04:14:07.png)
