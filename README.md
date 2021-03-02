@@ -32,8 +32,9 @@ run_hf_mlm.py \
 --save_total_limit 1 \
 --overwrite_output_dir \
 ```
+perplexity after 6 minutes of training: 789.6293240905907
 
-for comparison, train a similar (has a bit more parameters) ALBERT model 
+For comparison, train a similar (has a bit more parameters) ALBERT model 
 ```
 run_hf_mlm.py \
 --config albert-base-v2 \
@@ -50,3 +51,4 @@ run_hf_mlm.py \
 --save_total_limit 1 \
 --overwrite_output_dir \
 ```
+perplexity after 12 minutes of training (same amount of data as above): 738.9137609576597 
