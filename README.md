@@ -21,6 +21,7 @@ This is a simple implementation of the GLOM model ([paper](https://arxiv.org/pdf
 ```
 run_hf_mlm.py \
 --config configs/glom/config.json \
+--model_type glom \
 --tokenizer albert-base-v2 \
 --dataset_name wikitext \
 --dataset_config_name wikitext-103-raw-v1 \
