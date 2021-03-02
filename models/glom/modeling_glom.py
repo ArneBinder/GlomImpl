@@ -284,27 +284,11 @@ class GlomAttention(nn.Module):
         self.attention_head_size = config.hidden_size // config.num_attention_heads
         self.all_head_size = self.num_attention_heads * self.attention_head_size
 
-        self.head_projections = nn.ModuleList(
-            [
-                nn.Linear(
-                    config.hidden_size // config.num_attention_heads,
-                    self.attention_head_size,
-                )
-                for _ in range(self.num_attention_heads)
-            ]
-        )
-
-        # aggregate lower, current, and higher "layer" (glom layer aka attention head)
-        sizes = [3 for _ in range(self.num_attention_heads)]
-        # first and last "layer" have no lower / higher "layer" to aggregate from
-        sizes[0] -= 1
-        sizes[-1] -= 1
+        # aggregate lower, and higher "layer" (glom layer aka attention head)
         self.aggr_projections = nn.ModuleList(
             [
-                nn.Linear(
-                    self.attention_head_size * sizes[i], self.attention_head_size,
-                )
-                for i in range(self.num_attention_heads)
+                nn.Linear(self.attention_head_size, self.attention_head_size,)
+                for _ in range((self.num_attention_heads - 1) * 2)
             ]
         )
 
@@ -367,17 +351,10 @@ class GlomAttention(nn.Module):
     ):
 
         # has format (batch, head, token, dims-per-head)
-        projected_layer_list = [
-            p(
-                hidden_states[
-                    :,
-                    :,
-                    self.attention_head_size * i : self.attention_head_size * (i + 1),
-                ]
-            )
-            for i, p in enumerate(self.head_projections)
-        ]
-        projected_layer = torch.stack(projected_layer_list, dim=1)
+        projected_layer = hidden_states.view(
+            hidden_states.size()[:2]
+            + (self.attention_head_size, self.num_attention_heads)
+        ).permute(0, 3, 1, 2)
         query_layer = projected_layer
         key_layer = projected_layer
         value_layer = projected_layer
@@ -442,19 +419,22 @@ class GlomAttention(nn.Module):
 
         context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
 
+        # TODO: optimize
+        projected_context_layer_list = []
+        for i in range(self.num_attention_heads):
+            # integrate the lower and higher "layer" (if available)
+            x = None
+            if i > 0:
+                x = self.aggr_projections[i * 2 - 1](context_layer[:, :, i - 1])
+            if i < self.num_attention_heads - 1:
+                from_higher = self.aggr_projections[i * 2](context_layer[:, :, i + 1])
+                x = from_higher if x is None else x + from_higher
+            assert (
+                x is not None
+            ), f"not enough layers (use at least two layers): {self.num_attention_heads}"
+            projected_context_layer_list.append(x)
         # Should find a better way to do this
         b = self.dense.bias.to(context_layer.dtype)
-
-        projected_context_layer_list = []
-        for i, p in enumerate(self.aggr_projections):
-            # integrate the lower and higher "layer" (if available)
-            x = context_layer[
-                :, :, max(i - 1, 0) : min(i + 2, self.num_attention_heads)
-            ]
-            # flatten heads
-            x = x.view(x.size()[:2] + (-1,))
-            x = p(x)
-            projected_context_layer_list.append(x)
         projected_context_layer = torch.cat(projected_context_layer_list, dim=-1) + b
 
         projected_context_layer_dropout = self.output_dropout(projected_context_layer)
@@ -477,8 +457,8 @@ class GlomLayer(nn.Module):
             config.hidden_size, eps=config.layer_norm_eps
         )
         self.attention = GlomAttention(config)
-        self.ffn = nn.Linear(config.hidden_size, config.intermediate_size)
-        self.ffn_output = nn.Linear(config.intermediate_size, config.hidden_size)
+        # self.ffn = nn.Linear(config.hidden_size, config.intermediate_size)
+        # self.ffn_output = nn.Linear(config.intermediate_size, config.hidden_size)
         self.activation = ACT2FN[config.hidden_act]
         self.dropout = nn.Dropout(config.hidden_dropout_prob)
 
@@ -494,23 +474,11 @@ class GlomLayer(nn.Module):
             hidden_states, attention_mask, head_mask, output_attentions
         )
 
-        ffn_output = apply_chunking_to_forward(
-            self.ff_chunk,
-            self.chunk_size_feed_forward,
-            self.seq_len_dim,
-            attention_output[0],
-        )
-        hidden_states = self.full_layer_layer_norm(ffn_output)
+        hidden_states = attention_output[0]
 
         return (hidden_states,) + attention_output[
             1:
         ]  # add attentions if we output them
-
-    def ff_chunk(self, attention_output):
-        ffn_output = self.ffn(attention_output)
-        ffn_output = self.activation(ffn_output)
-        ffn_output = self.ffn_output(ffn_output)
-        return ffn_output
 
 
 class GlomLayerGroup(nn.Module):
