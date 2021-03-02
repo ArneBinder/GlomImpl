@@ -21,6 +21,8 @@ https://huggingface.co/models?filter=masked-lm
 """
 # You can also adapt this script on your own masked language modeling task. Pointers for this are left as comments.
 
+import csv
+import json
 import logging
 import math
 import os
@@ -42,11 +44,13 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
+from transformers.data.data_collator import DataCollatorWithPadding
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
 
 import wandb
 from models.glom.configuration_glom import GlomConfig
 from models.glom.modeling_glom import GlomForMaskedLM
+from trainer import MyTrainer
 
 logger = logging.getLogger(__name__)
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_MASKED_LM_MAPPING.keys())
@@ -234,6 +238,14 @@ def main():
     # initialize weights & biases logging
     wandb.init(project="glom", entity="arne")
 
+    if training_args.do_predict:
+        try:
+            from sklearn import cluster
+        except ModuleNotFoundError as e:
+            raise ModuleNotFoundError(
+                f"prediction requires the python module sklearn, install via: 'pip install scikit-learn' (original exception: {e})",
+            )
+
     # Detecting last checkpoint.
     last_checkpoint = None
     if (
@@ -376,8 +388,6 @@ def main():
             "You are instantiating a new tokenizer from scratch. This is not supported by this script."
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
-    if config.tokenizer_class is None:
-        config.tokenizer_class = type(tokenizer).__name__
 
     if isinstance(config, GlomConfig):
         model_cls = GlomForMaskedLM
@@ -511,7 +521,7 @@ def main():
     )
 
     # Initialize our Trainer
-    trainer = Trainer(
+    trainer = MyTrainer(
         model=model,
         args=training_args,
         train_dataset=tokenized_datasets["train"] if training_args.do_train else None,
@@ -558,11 +568,11 @@ def main():
         perplexity = math.exp(eval_output["eval_loss"])
         results["perplexity"] = perplexity
 
-        output_eval_file = os.path.join(
+        output_prediction_file = os.path.join(
             training_args.output_dir, "eval_results_mlm.txt"
         )
         if trainer.is_world_process_zero():
-            with open(output_eval_file, "w") as writer:
+            with open(output_prediction_file, "w") as writer:
                 logger.info("***** Eval results *****")
                 for key, value in sorted(results.items()):
                     logger.info(f"  {key} = {value}")
@@ -573,20 +583,46 @@ def main():
     if training_args.do_predict:
         logger.info("*** Prediction ***")
 
-        output = trainer.predict(test_dataset=trainer.eval_dataset)
+        # return hidden states
+        def overwrite_inputs_callback(inputs):
+            inputs["output_hidden_states"] = True
+            return inputs
 
-        # perplexity = math.exp(eval_output["eval_loss"])
-        # results["perplexity"] = perplexity
+        trainer.overwrite_inputs_callback = overwrite_inputs_callback
 
-        output_eval_file = os.path.join(
-            training_args.output_dir, "prediction_results_glom.txt"
+        # disable input masking
+        trainer.data_collator.mlm = False
+
+        output = trainer.predict(
+            test_dataset=trainer.eval_dataset, ignore_keys=["logits"]
+        )
+        label_ids = output.label_ids.reshape(-1)
+        result = {"tokens": tokenizer.convert_ids_to_tokens(label_ids)}
+        last_hidden_state = output.predictions[-1]
+        last_hidden_state = last_hidden_state.reshape(-1, last_hidden_state.shape[-1])
+        attention_head_size = last_hidden_state.shape[-1] // config.num_attention_heads
+        for i in range(config.num_attention_heads):
+            current_state = last_hidden_state[
+                :, attention_head_size * i : attention_head_size * (i + 1)
+            ]
+            # clustering = cluster.DBSCAN(eps=3, min_samples=2).fit(current_state)
+            n_clusters = (config.num_attention_heads - i) * 5
+            clustering = cluster.SpectralClustering(
+                n_clusters=n_clusters, assign_labels="discretize", random_state=0
+            ).fit(current_state)
+            result[f"clustering_{i}"] = clustering.labels_.tolist()
+
+        output_prediction_file = os.path.join(
+            training_args.output_dir, "prediction_results_glom.tsv"
         )
         if trainer.is_world_process_zero():
-            with open(output_eval_file, "w") as writer:
+            with open(output_prediction_file, "w") as f:
                 logger.info("***** Prediction results *****")
-                # for key, value in sorted(results.items()):
-                #    logger.info(f"  {key} = {value}")
-                #    writer.write(f"{key} = {value}\n")
+                # json.dump(result, f)
+                writer = csv.writer(f, delimiter="\t")
+                writer.writerow(result.keys())
+                for i, t in enumerate(result["tokens"]):
+                    writer.writerow([v[i] for v in result.values()])
 
     return results
 
