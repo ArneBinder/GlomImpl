@@ -35,7 +35,6 @@
                 "--model_name_or_path", "albert-base-v2",
                 "--dataset_name", "wikitext",
                 "--dataset_config_name", "wikitext-2-raw-v1",
-                "--max_examples_train", "1000",
                 "--do_train",
                 "--do_eval",
                 "--evaluation_strategy", "steps",
