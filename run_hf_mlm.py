@@ -44,6 +44,7 @@ from transformers import (
 )
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
 
+import wandb
 from models.glom.configuration_glom import GlomConfig
 from models.glom.modeling_glom import GlomForMaskedLM
 
@@ -174,6 +175,18 @@ class DataTrainingArguments:
             "If False, will pad the samples dynamically when batching to the maximum length in the batch."
         },
     )
+    max_examples_train: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "If set, use only this first number of instances for training."
+        },
+    )
+    max_examples_validate: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "If set, use only this first number of instances for validation."
+        },
+    )
 
     def __post_init__(self):
         if (
@@ -217,6 +230,9 @@ def main():
         )
     else:
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
+
+    # initialize weights & biases logging
+    wandb.init(project="glom", entity="arne")
 
     # Detecting last checkpoint.
     last_checkpoint = None
@@ -298,6 +314,19 @@ def main():
     # See more about loading any type of standard or custom dataset (from files, python dict, pandas DataFrame, etc) at
     # https://huggingface.co/docs/datasets/loading_datasets.html.
 
+    if data_args.max_examples_train is not None:
+        datasets["train"] = load_dataset(
+            data_args.dataset_name,
+            data_args.dataset_config_name,
+            split=f"train[:{data_args.max_examples_train}]",
+        )
+    if data_args.max_examples_validate is not None:
+        datasets["validation"] = load_dataset(
+            data_args.dataset_name,
+            data_args.dataset_config_name,
+            split=f"validation[:{data_args.max_examples_validate}]",
+        )
+
     # Load pretrained model and tokenizer
     #
     # Distributed training:
@@ -308,16 +337,20 @@ def main():
         "revision": model_args.model_revision,
         "use_auth_token": True if model_args.use_auth_token else None,
     }
-    # if model_args.config_name:
-    #    config = AutoConfig.from_pretrained(model_args.config_name, **config_kwargs)
-    # elif model_args.model_name_or_path:
-    #    config = AutoConfig.from_pretrained(
-    #        model_args.model_name_or_path, **config_kwargs
-    #    )
-    # else:
-    #    config = CONFIG_MAPPING[model_args.model_type]()
-    #    logger.warning("You are instantiating a new config instance from scratch.")
-    config = GlomConfig.from_pretrained(model_args.config_name, **config_kwargs)
+
+    if model_args.config_name:
+        if "glom" in model_args.config_name:
+            config = GlomConfig.from_pretrained(model_args.config_name, **config_kwargs)
+        else:
+            config = AutoConfig.from_pretrained(model_args.config_name, **config_kwargs)
+    elif model_args.model_name_or_path:
+        config = AutoConfig.from_pretrained(
+            model_args.model_name_or_path, **config_kwargs
+        )
+    else:
+        CONFIG_MAPPING["glom"] = GlomConfig
+        config = CONFIG_MAPPING[model_args.model_type]()
+        logger.warning("You are instantiating a new config instance from scratch.")
 
     tokenizer_kwargs = {
         "cache_dir": model_args.cache_dir,
@@ -339,8 +372,13 @@ def main():
             "You can do it from another script, save it, and load it from here, using --tokenizer_name."
         )
 
+    if isinstance(config, GlomConfig):
+        model_cls = GlomForMaskedLM
+    else:
+        model_cls = AutoModelForMaskedLM
+
     if model_args.model_name_or_path:
-        model = GlomForMaskedLM.from_pretrained(
+        model = model_cls.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
             config=config,
@@ -350,7 +388,11 @@ def main():
         )
     else:
         logger.info("Training new model from scratch")
-        model = GlomForMaskedLM(config)
+        model = (
+            GlomForMaskedLM(config)
+            if isinstance(config, GlomConfig)
+            else AutoModelForMaskedLM.from_config(config)
+        )
 
     model.resize_token_embeddings(len(tokenizer))
 

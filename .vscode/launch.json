@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "run_hf_mlm",
+            "name": "train glom",
             "type": "python",
             "request": "launch",
             "program": "run_hf_mlm.py",
@@ -17,7 +17,32 @@
                 "--dataset_config_name", "wikitext-2-raw-v1",
                 "--do_train",
                 "--do_eval",
+                "--evaluation_strategy", "steps",
+                "--logging_steps", "100",
                 "--output_dir", "train/test-mlm",
+                "--save_total_limit", "1",
+                "--overwrite_output_dir",
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "train albert",
+            "type": "python",
+            "request": "launch",
+            "program": "run_hf_mlm.py",
+            "args": [
+                "--model_name_or_path", "albert-base-v2",
+                "--dataset_name", "wikitext",
+                "--dataset_config_name", "wikitext-2-raw-v1",
+                "--max_examples_train", "1000",
+                "--do_train",
+                "--do_eval",
+                "--evaluation_strategy", "steps",
+                "--logging_steps", "100",
+                "--output_dir", "train/test-mlm",
+                "--save_total_limit", "1",
+                "--overwrite_output_dir",
             ],
             "console": "integratedTerminal",
             "justMyCode": false
