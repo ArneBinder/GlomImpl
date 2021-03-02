@@ -288,7 +288,7 @@ class GlomAttention(nn.Module):
         self.aggr_projections = nn.ModuleList(
             [
                 nn.Linear(self.attention_head_size, self.attention_head_size,)
-                for _ in range((self.num_attention_heads - 1) * 2)
+                for _ in range((self.num_attention_heads * 3) - 2)
             ]
         )
 
@@ -422,16 +422,12 @@ class GlomAttention(nn.Module):
         # TODO: optimize
         projected_context_layer_list = []
         for i in range(self.num_attention_heads):
-            # integrate the lower and higher "layer" (if available)
-            x = None
+            # aggregate with the lower and higher "layer" (if available)
+            x = self.aggr_projections[i * 3](context_layer[:, :, i])
             if i > 0:
-                x = self.aggr_projections[i * 2 - 1](context_layer[:, :, i - 1])
+                x = x + self.aggr_projections[i * 3 - 1](context_layer[:, :, i - 1])
             if i < self.num_attention_heads - 1:
-                from_higher = self.aggr_projections[i * 2](context_layer[:, :, i + 1])
-                x = from_higher if x is None else x + from_higher
-            assert (
-                x is not None
-            ), f"not enough layers (use at least two layers): {self.num_attention_heads}"
+                x = x + self.aggr_projections[i * 3 + 1](context_layer[:, :, i + 1])
             projected_context_layer_list.append(x)
         # Should find a better way to do this
         b = self.dense.bias.to(context_layer.dtype)
