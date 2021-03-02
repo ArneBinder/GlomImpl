@@ -2,7 +2,7 @@
 
 This is a simple implementation of the GLOM model ([paper](https://arxiv.org/pdf/2102.12627.pdf)) for the **textual** domain. It heavily builds on the [hugginface implementation](https://github.com/huggingface/transformers/tree/master/src/transformers/models/albert) of the ALBERT model ([paper](https://arxiv.org/abs/1909.11942)).
 
-![GLOM_architecture](GLOM_architecture.png)
+![GLOM_architecture](images/GLOM_architecture.png)
 
 ## Approach
 * use t **transformer layers** (t=number of **GLOM time steps** you want to model)
