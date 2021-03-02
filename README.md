@@ -17,5 +17,36 @@ This is a simple implementation of the GLOM model ([paper](https://arxiv.org/pdf
 
 2) train a model
 ```
-python run_hf_mlm.py --config configs/glom/config.json --model_type glom --tokenizer albert-base-v2 --dataset_name wikitext --dataset_config_name wikitext-2-raw-v1 --do_train --do_eval --evaluation_strategy steps --logging_steps 100 --output_dir train/test-mlm
+run_hf_mlm.py \
+--config configs/glom/config.json \
+--tokenizer albert-base-v2 \
+--dataset_name wikitext \
+--dataset_config_name wikitext-103-raw-v1 \
+--do_train \
+--max_examples_train 100000 \
+--num_train_epochs 1 \
+--do_eval \
+--evaluation_strategy steps \
+--logging_steps 100 \
+--output_dir train/test-mlm \
+--save_total_limit 1 \
+--overwrite_output_dir \
+```
+
+for comparison, train a similar (has a bit more parameters) ALBERT model 
+```
+run_hf_mlm.py \
+--config albert-base-v2 \
+--tokenizer albert-base-v2 \
+--dataset_name wikitext \
+--dataset_config_name wikitext-103-raw-v1 \
+--do_train \
+--max_examples_train 100000 \
+--num_train_epochs 1 \
+--do_eval \
+--evaluation_strategy steps \
+--logging_steps 100 \
+--output_dir train/test-mlm \
+--save_total_limit 1 \
+--overwrite_output_dir \
 ```
