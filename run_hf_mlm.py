@@ -48,9 +48,9 @@ from transformers.data.data_collator import DataCollatorWithPadding
 from transformers.trainer_utils import get_last_checkpoint, is_main_process
 
 import wandb
-from models.glom.configuration_glom import GlomConfig
-from models.glom.modeling_glom import GlomForMaskedLM
-from trainer import MyTrainer
+from src.models.glom.configuration_glom import GlomConfig
+from src.models.glom.modeling_glom import GlomForMaskedLM
+from src.trainer import MyTrainer
 
 logger = logging.getLogger(__name__)
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_MASKED_LM_MAPPING.keys())
