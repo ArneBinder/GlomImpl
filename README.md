@@ -9,7 +9,7 @@ This is a simple implementation of the GLOM model ([paper](https://arxiv.org/pdf
 * use L **attention heads** (L=number of **GLOM levels** you want to model)
 * apply these small modifications to the ALBERT model:
 	1) remove the linear projections for query, key, value; just pass through `[(d/L)*i..(d/L)*(i+1)]` to the i'th head
-	2) ~~modify/constrain the dense layer that follows the attention in a way that each partition `[(d/L)*i..(d/L)*(i+1)]` of its output is only constructed by the output of the (i-1)-th, the i-th, and the (i+1)-th head (this models the access to the lower and higher GLOM levels)~~ SEE [THIS CODE SNIPPET](https://github.com/ArneBinder/GlomImpl/blob/9c1ff61b8ade27d1780f3aff94577182aa1d1f88/src/models/glom/modeling_glom.py#L296-L315) FOR THE IMPLEMENTATION OF THE ACTUAL AGRREGATION LOGIC.
+	2) ~~modify/constrain the dense layer that follows the attention in a way that each partition `[(d/L)*i..(d/L)*(i+1)]` of its output is only constructed by the output of the (i-1)-th, the i-th, and the (i+1)-th head (this models the access to the lower and higher GLOM levels)~~ SEE [THIS CODE SNIPPET](https://github.com/ArneBinder/GlomImpl/blob/9ed81180f4455f93d4d2885aef92da85cdeda5d7/src/models/glom/modeling_glom.py#L302-L321) FOR THE IMPLEMENTATION OF THE ACTUAL AGRREGATION LOGIC.
 	3) remove the skip connection(s) and the MLP that sits on top of the attention layer
 	4) for masked language model training: project the input token embedding only to `[0..(d/L)]` (the first level). Also, only take these dimensions from the final hidden state to predict the masked token. All other dimensions get a (position independent, but level dependent) bias as zero-timestep-input.
 
