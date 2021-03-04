@@ -320,7 +320,10 @@ class GlomAttention(nn.Module):
                 2 * config.max_position_embeddings - 1, self.attention_head_size
             )
 
-        self.activation_from_previous_timestep = torch.nn.Identity()  # SineActivation()
+        # TODO: try SineActivation()
+        self.activation_from_previous_timestep_same_level = torch.nn.Identity()
+        self.activation_from_previous_timestep_lower_level = torch.nn.Identity()
+        self.activation_from_previous_timestep_higher_level = torch.nn.Identity()
         self.activation_from_attention_output = torch.nn.Identity()
 
     # Copied from transformers.models.bert.modeling_bert.BertSelfAttention.transpose_for_scores
@@ -438,17 +441,17 @@ class GlomAttention(nn.Module):
                 self.aggr_projections[i * 3](context_layer[:, :, i])
             )
             # aggregate with the same, lower and higher level (if available) of previous time step
-            x = x + self.activation_from_previous_timestep(
+            x = x + self.activation_from_previous_timestep_same_level(
                 self.aggr_projections[i * 3 + 1](projected_layer[:, i])
             )
             n = 2
             if i > 0:
-                x = x + self.activation_from_previous_timestep(
+                x = x + self.activation_from_previous_timestep_lower_level(
                     self.aggr_projections[i * 3 - 1](projected_layer[:, i - 1])
                 )
                 n += 1
             if i < self.num_attention_heads - 1:
-                x = x + self.activation_from_previous_timestep(
+                x = x + self.activation_from_previous_timestep_higher_level(
                     self.aggr_projections[i * 3 + 2](projected_layer[:, i + 1])
                 )
                 n += 1
