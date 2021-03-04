@@ -33,7 +33,7 @@ run_hf_mlm.py \
 --logging_steps 100 \
 --output_dir train/test-mlm \
 --save_total_limit 1 \
---overwrite_output_dir \
+--overwrite_output_dir
 ```
 perplexity after **6 minutes** of training: 795.4487658472486
 
@@ -52,11 +52,16 @@ run_hf_mlm.py \
 --logging_steps 100 \
 --output_dir train/test-mlm \
 --save_total_limit 1 \
---overwrite_output_dir \
+--overwrite_output_dir
 ```
 perplexity after **12 minutes** of training (same amount of data as above): 738.9137609576597 
 
 ![glom_albert_comparison_loss](images/WandB_2.3.2021_04-14-07_loss.png)
 ![glom_albert_comparison_flos](images/WandB_2.3.2021_04-14-07_flos.png)
+
+
+Results for runs with same parameters as above, but on the whole dataset (**w/o** parameter `--max_examples_train 100000`):  
+GLOM: 	perplexity = 623.4778409995062 (time=2:26:08)
+ALBERT: perplexity = 746.7975879565178 (time=3:55:32) (NOTE: This is worse then the short run, have to do hyperparameter search to get valid scores.)
 
 ![glom_albert_comparison_loss_long_run](images/wandb_comparison_long-run_loss.png)
