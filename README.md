@@ -57,6 +57,8 @@ run_hf_mlm.py \
 perplexity after **12 minutes** of training (same amount of data as above): 738.9137609576597 
 
 ![glom_albert_comparison_loss](images/WandB_2.3.2021_04-14-07_loss.png)
+
+Comparison of executed **floating point operations**:
 ![glom_albert_comparison_flos](images/WandB_2.3.2021_04-14-07_flos.png)
 
 
