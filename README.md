@@ -61,7 +61,7 @@ perplexity after **12 minutes** of training (same amount of data as above): 738.
 
 
 Results for runs with same parameters as above, but on the whole dataset (**w/o** parameter `--max_examples_train 100000`):  
-GLOM: 	perplexity = 623.4778409995062 (time=2:26:08)
-ALBERT: perplexity = 746.7975879565178 (time=3:55:32) (NOTE: This is worse then the short run, have to do hyperparameter search to get valid scores.)
+* GLOM:		perplexity = 623.4778409995062 (time=2:26:08)
+* ALBERT: 	perplexity = 746.7975879565178 (time=3:55:32) (NOTE: This is worse then the short run, have to do hyperparameter search to get valid scores.)
 
 ![glom_albert_comparison_loss_long_run](images/wandb_comparison_long-run_loss.png)
