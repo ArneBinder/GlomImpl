@@ -182,6 +182,8 @@ class GlomAttention(nn.Module):
         self.activation_from_previous_timestep_higher_level = torch.nn.Identity()
         self.activation_from_attention_output = torch.nn.Identity()
 
+        self.attention_temperature = getattr(config, "attention_temperature", 1.0)
+
     # Copied from transformers.models.bert.modeling_bert.BertSelfAttention.transpose_for_scores
     def transpose_for_scores(self, x):
         new_x_shape = x.size()[:-1] + (
@@ -274,6 +276,10 @@ class GlomAttention(nn.Module):
                     + relative_position_scores_query
                     + relative_position_scores_key
                 )
+
+        # apply the "inverse temperature parameter that determines the
+        # sharpness of the attention" (see GLOM paper)
+        attention_scores = attention_scores * self.attention_temperature
 
         # Normalize the attention scores to probabilities.
         attention_probs = nn.Softmax(dim=-1)(attention_scores)
