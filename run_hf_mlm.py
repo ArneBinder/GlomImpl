@@ -243,7 +243,7 @@ def main():
 
     # initialize weights & biases logging
     if data_args.wandb_entity is not None:
-        wandb.init(project="glom", entity=data_args)
+        wandb.init(project="glom", entity=data_args.wandb_entity)
 
     if training_args.do_predict:
         try:
