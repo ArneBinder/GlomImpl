@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "train glom",
+            "name": "train glom - long run",
             "type": "python",
             "request": "launch",
             "program": "run_hf_mlm.py",
@@ -16,7 +16,6 @@
                 "--dataset_name", "wikitext",
                 "--dataset_config_name", "wikitext-103-raw-v1",
                 "--do_train",
-                "--max_examples_train", "1000",
                 "--num_train_epochs", "1",
                 "--do_eval",
                 "--evaluation_strategy", "steps",
@@ -61,9 +60,9 @@
                 "--model_type", "glom",
                 "--tokenizer", "albert-base-v2",
                 "--dataset_name", "wikitext",
-                "--dataset_config_name", "wikitext-2-raw-v1",
+                "--dataset_config_name", "wikitext-103-raw-v1",
                 "--do_train",
-                "--max_examples_train", "1000",
+                "--max_examples_train", "100000",
                 "--num_train_epochs", "1",
                 "--do_eval",
                 "--evaluation_strategy", "steps",
