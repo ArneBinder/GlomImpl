@@ -191,6 +191,12 @@ class DataTrainingArguments:
             "help": "If set, use only this first number of instances for validation."
         },
     )
+    wandb_entity: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "If set, use this as user/team name for Weights & Biases logging."
+        },
+    )
 
     def __post_init__(self):
         if (
@@ -236,7 +242,8 @@ def main():
         model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
     # initialize weights & biases logging
-    wandb.init(project="glom", entity="arne")
+    if data_args.wandb_entity is not None:
+        wandb.init(project="glom", entity=data_args)
 
     if training_args.do_predict:
         try:
