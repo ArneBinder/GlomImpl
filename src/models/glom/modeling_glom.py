@@ -52,151 +52,7 @@ from .configuration_glom import GlomConfig
 logger = logging.get_logger(__name__)
 
 _CONFIG_FOR_DOC = "GlomConfig"
-_TOKENIZER_FOR_DOC = "GlomTokenizer"
-
-
-ALBERT_PRETRAINED_MODEL_ARCHIVE_LIST = [
-    "albert-base-v1",
-    "albert-large-v1",
-    "albert-xlarge-v1",
-    "albert-xxlarge-v1",
-    "albert-base-v2",
-    "albert-large-v2",
-    "albert-xlarge-v2",
-    "albert-xxlarge-v2",
-    # See all ALBERT models at https://huggingface.co/models?filter=albert
-]
-
-
-def load_tf_weights_in_albert(model, config, tf_checkpoint_path):
-    """ Load tf checkpoints in a pytorch model."""
-    try:
-        import re
-
-        import numpy as np
-        import tensorflow as tf
-    except ImportError:
-        logger.error(
-            "Loading a TensorFlow model in PyTorch, requires TensorFlow to be installed. Please see "
-            "https://www.tensorflow.org/install/ for installation instructions."
-        )
-        raise
-    tf_path = os.path.abspath(tf_checkpoint_path)
-    logger.info("Converting TensorFlow checkpoint from {}".format(tf_path))
-    # Load weights from TF model
-    init_vars = tf.train.list_variables(tf_path)
-    names = []
-    arrays = []
-    for name, shape in init_vars:
-        logger.info("Loading TF weight {} with shape {}".format(name, shape))
-        array = tf.train.load_variable(tf_path, name)
-        names.append(name)
-        arrays.append(array)
-
-    for name, array in zip(names, arrays):
-        print(name)
-
-    for name, array in zip(names, arrays):
-        original_name = name
-
-        # If saved from the TF HUB module
-        name = name.replace("module/", "")
-
-        # Renaming and simplifying
-        name = name.replace("ffn_1", "ffn")
-        name = name.replace("bert/", "albert/")
-        name = name.replace("attention_1", "attention")
-        name = name.replace("transform/", "")
-        name = name.replace("LayerNorm_1", "full_layer_layer_norm")
-        name = name.replace("LayerNorm", "attention/LayerNorm")
-        name = name.replace("transformer/", "")
-
-        # The feed forward layer had an 'intermediate' step which has been abstracted away
-        name = name.replace("intermediate/dense/", "")
-        name = name.replace("ffn/intermediate/output/dense/", "ffn_output/")
-
-        # ALBERT attention was split between self and output which have been abstracted away
-        name = name.replace("/output/", "/")
-        name = name.replace("/self/", "/")
-
-        # The pooler is a linear layer
-        name = name.replace("pooler/dense", "pooler")
-
-        # The classifier was simplified to predictions from cls/predictions
-        name = name.replace("cls/predictions", "predictions")
-        name = name.replace("predictions/attention", "predictions")
-
-        # Naming was changed to be more explicit
-        name = name.replace("embeddings/attention", "embeddings")
-        name = name.replace("inner_group_", "albert_layers/")
-        name = name.replace("group_", "albert_layer_groups/")
-
-        # Classifier
-        if len(name.split("/")) == 1 and (
-            "output_bias" in name or "output_weights" in name
-        ):
-            name = "classifier/" + name
-
-        # No ALBERT model currently handles the next sentence prediction task
-        if "seq_relationship" in name:
-            name = name.replace(
-                "seq_relationship/output_", "sop_classifier/classifier/"
-            )
-            name = name.replace("weights", "weight")
-
-        name = name.split("/")
-
-        # Ignore the gradients applied by the LAMB/ADAM optimizers.
-        if (
-            "adam_m" in name
-            or "adam_v" in name
-            or "AdamWeightDecayOptimizer" in name
-            or "AdamWeightDecayOptimizer_1" in name
-            or "global_step" in name
-        ):
-            logger.info("Skipping {}".format("/".join(name)))
-            continue
-
-        pointer = model
-        for m_name in name:
-            if re.fullmatch(r"[A-Za-z]+_\d+", m_name):
-                scope_names = re.split(r"_(\d+)", m_name)
-            else:
-                scope_names = [m_name]
-
-            if scope_names[0] == "kernel" or scope_names[0] == "gamma":
-                pointer = getattr(pointer, "weight")
-            elif scope_names[0] == "output_bias" or scope_names[0] == "beta":
-                pointer = getattr(pointer, "bias")
-            elif scope_names[0] == "output_weights":
-                pointer = getattr(pointer, "weight")
-            elif scope_names[0] == "squad":
-                pointer = getattr(pointer, "classifier")
-            else:
-                try:
-                    pointer = getattr(pointer, scope_names[0])
-                except AttributeError:
-                    logger.info("Skipping {}".format("/".join(name)))
-                    continue
-            if len(scope_names) >= 2:
-                num = int(scope_names[1])
-                pointer = pointer[num]
-
-        if m_name[-11:] == "_embeddings":
-            pointer = getattr(pointer, "weight")
-        elif m_name == "kernel":
-            array = np.transpose(array)
-        try:
-            assert (
-                pointer.shape == array.shape
-            ), f"Pointer shape {pointer.shape} and array shape {array.shape} mismatched"
-        except AssertionError as e:
-            e.args += (pointer.shape, array.shape)
-            raise
-        print("Initialize PyTorch weight {} from {}".format(name, original_name))
-        pointer.data = torch.from_numpy(array)
-
-    return model
+_TOKENIZER_FOR_DOC = "AlbertTokenizer"
 
 
 class GlomEmbeddings(nn.Module):
@@ -681,7 +537,7 @@ class GlomForPreTrainingOutput(ModelOutput):
     attentions: Optional[Tuple[torch.FloatTensor]] = None
 
 
-ALBERT_START_DOCSTRING = r"""
+GLOM_START_DOCSTRING = r"""
 
     This model inherits from :class:`~transformers.PreTrainedModel`. Check the superclass documentation for the generic
     methods the library implements for all its model (such as downloading or saving, resizing the input embeddings,
@@ -698,7 +554,7 @@ ALBERT_START_DOCSTRING = r"""
             weights.
 """
 
-ALBERT_INPUTS_DOCSTRING = r"""
+GLOM_INPUTS_DOCSTRING = r"""
     Args:
         input_ids (:obj:`torch.LongTensor` of shape :obj:`({0})`):
             Indices of input sequence tokens in the vocabulary.
@@ -750,13 +606,12 @@ ALBERT_INPUTS_DOCSTRING = r"""
 
 
 @add_start_docstrings(
-    "The bare ALBERT Model transformer outputting raw hidden-states without any specific head on top.",
-    ALBERT_START_DOCSTRING,
+    "The bare GLOM Model transformer outputting raw hidden-states without any specific head on top.",
+    GLOM_START_DOCSTRING,
 )
 class GlomModel(GlomPreTrainedModel):
 
     config_class = GlomConfig
-    load_tf_weights = load_tf_weights_in_albert
     base_model_prefix = "glom"
 
     def __init__(self, config, add_pooling_layer=True):
@@ -800,7 +655,7 @@ class GlomModel(GlomPreTrainedModel):
             ].attention.prune_heads(heads)
 
     @add_start_docstrings_to_model_forward(
-        ALBERT_INPUTS_DOCSTRING.format("batch_size, sequence_length")
+        GLOM_INPUTS_DOCSTRING.format("batch_size, sequence_length")
     )
     @add_code_sample_docstrings(
         tokenizer_class=_TOKENIZER_FOR_DOC,
@@ -898,7 +753,7 @@ class GlomModel(GlomPreTrainedModel):
     Glom Model with two heads on top as done during the pretraining: a `masked language modeling` head and a
     `sentence order prediction (classification)` head.
     """,
-    ALBERT_START_DOCSTRING,
+    GLOM_START_DOCSTRING,
 )
 class GlomForPreTraining(GlomPreTrainedModel):
     def __init__(self, config):
@@ -920,7 +775,7 @@ class GlomForPreTraining(GlomPreTrainedModel):
         return self.albert.embeddings.word_embeddings
 
     @add_start_docstrings_to_model_forward(
-        ALBERT_INPUTS_DOCSTRING.format("batch_size, sequence_length")
+        GLOM_INPUTS_DOCSTRING.format("batch_size, sequence_length")
     )
     @replace_return_docstrings(
         output_type=GlomForPreTrainingOutput, config_class=_CONFIG_FOR_DOC
@@ -1051,7 +906,7 @@ class GlomSOPHead(nn.Module):
 
 
 @add_start_docstrings(
-    "Glom Model with a `language modeling` head on top.", ALBERT_START_DOCSTRING,
+    "Glom Model with a `language modeling` head on top.", GLOM_START_DOCSTRING,
 )
 class GlomForMaskedLM(GlomPreTrainedModel):
 
@@ -1075,11 +930,11 @@ class GlomForMaskedLM(GlomPreTrainedModel):
         return self.glom.embeddings.word_embeddings
 
     @add_start_docstrings_to_model_forward(
-        ALBERT_INPUTS_DOCSTRING.format("batch_size, sequence_length")
+        GLOM_INPUTS_DOCSTRING.format("batch_size, sequence_length")
     )
     @add_code_sample_docstrings(
         tokenizer_class=_TOKENIZER_FOR_DOC,
-        checkpoint="albert-base-v2",
+        # checkpoint="albert-base-v2",
         output_type=MaskedLMOutput,
         config_class=_CONFIG_FOR_DOC,
     )
@@ -1147,7 +1002,7 @@ class GlomForMaskedLM(GlomPreTrainedModel):
     Glom Model transformer with a sequence classification/regression head on top (a linear layer on top of the pooled
     output) e.g. for GLUE tasks.
     """,
-    ALBERT_START_DOCSTRING,
+    GLOM_START_DOCSTRING,
 )
 class GlomForSequenceClassification(GlomPreTrainedModel):
     def __init__(self, config):
@@ -1161,11 +1016,11 @@ class GlomForSequenceClassification(GlomPreTrainedModel):
         self.init_weights()
 
     @add_start_docstrings_to_model_forward(
-        ALBERT_INPUTS_DOCSTRING.format("batch_size, sequence_length")
+        GLOM_INPUTS_DOCSTRING.format("batch_size, sequence_length")
     )
     @add_code_sample_docstrings(
         tokenizer_class=_TOKENIZER_FOR_DOC,
-        checkpoint="albert-base-v2",
+        # checkpoint="albert-base-v2",
         output_type=SequenceClassifierOutput,
         config_class=_CONFIG_FOR_DOC,
     )
@@ -1236,7 +1091,7 @@ class GlomForSequenceClassification(GlomPreTrainedModel):
     Glom Model with a token classification head on top (a linear layer on top of the hidden-states output) e.g. for
     Named-Entity-Recognition (NER) tasks.
     """,
-    ALBERT_START_DOCSTRING,
+    GLOM_START_DOCSTRING,
 )
 class GlomForTokenClassification(GlomPreTrainedModel):
 
@@ -1253,11 +1108,11 @@ class GlomForTokenClassification(GlomPreTrainedModel):
         self.init_weights()
 
     @add_start_docstrings_to_model_forward(
-        ALBERT_INPUTS_DOCSTRING.format("batch_size, sequence_length")
+        GLOM_INPUTS_DOCSTRING.format("batch_size, sequence_length")
     )
     @add_code_sample_docstrings(
         tokenizer_class=_TOKENIZER_FOR_DOC,
-        checkpoint="albert-base-v2",
+        # checkpoint="albert-base-v2",
         output_type=TokenClassifierOutput,
         config_class=_CONFIG_FOR_DOC,
     )
@@ -1329,7 +1184,7 @@ class GlomForTokenClassification(GlomPreTrainedModel):
     Glom Model with a span classification head on top for extractive question-answering tasks like SQuAD (a linear
     layers on top of the hidden-states output to compute `span start logits` and `span end logits`).
     """,
-    ALBERT_START_DOCSTRING,
+    GLOM_START_DOCSTRING,
 )
 class GlomForQuestionAnswering(GlomPreTrainedModel):
 
@@ -1345,11 +1200,11 @@ class GlomForQuestionAnswering(GlomPreTrainedModel):
         self.init_weights()
 
     @add_start_docstrings_to_model_forward(
-        ALBERT_INPUTS_DOCSTRING.format("batch_size, sequence_length")
+        GLOM_INPUTS_DOCSTRING.format("batch_size, sequence_length")
     )
     @add_code_sample_docstrings(
         tokenizer_class=_TOKENIZER_FOR_DOC,
-        checkpoint="albert-base-v2",
+        # checkpoint="albert-base-v2",
         output_type=QuestionAnsweringModelOutput,
         config_class=_CONFIG_FOR_DOC,
     )
@@ -1435,7 +1290,7 @@ class GlomForQuestionAnswering(GlomPreTrainedModel):
     Glom Model with a multiple choice classification head on top (a linear layer on top of the pooled output and a
     softmax) e.g. for RocStories/SWAG tasks.
     """,
-    ALBERT_START_DOCSTRING,
+    GLOM_START_DOCSTRING,
 )
 class GlomForMultipleChoice(GlomPreTrainedModel):
     def __init__(self, config):
@@ -1448,11 +1303,11 @@ class GlomForMultipleChoice(GlomPreTrainedModel):
         self.init_weights()
 
     @add_start_docstrings_to_model_forward(
-        ALBERT_INPUTS_DOCSTRING.format("batch_size, num_choices, sequence_length")
+        GLOM_INPUTS_DOCSTRING.format("batch_size, num_choices, sequence_length")
     )
     @add_code_sample_docstrings(
         tokenizer_class=_TOKENIZER_FOR_DOC,
-        checkpoint="albert-base-v2",
+        # checkpoint="albert-base-v2",
         output_type=MultipleChoiceModelOutput,
         config_class=_CONFIG_FOR_DOC,
     )
