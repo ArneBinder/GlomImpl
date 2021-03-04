@@ -23,6 +23,7 @@
                 "--output_dir", "train/test-mlm",
                 "--save_total_limit", "1",
                 "--overwrite_output_dir",
+                "--wandb_entity", "arne",
             ],
             "console": "integratedTerminal",
             "justMyCode": false
@@ -46,6 +47,7 @@
                 "--output_dir", "train/test-mlm",
                 "--save_total_limit", "1",
                 "--overwrite_output_dir",
+                "--wandb_entity", "arne",
             ],
             "console": "integratedTerminal",
             "justMyCode": false
@@ -70,6 +72,7 @@
                 "--output_dir", "train/test-mlm",
                 "--save_total_limit", "1",
                 "--overwrite_output_dir",
+                "--wandb_entity", "arne",
             ],
             "console": "integratedTerminal",
             "justMyCode": false
