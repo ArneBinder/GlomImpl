@@ -153,7 +153,7 @@ class GlomAttention(nn.Module):
         self.aggr_projections = nn.ModuleList(
             [
                 nn.Linear(self.attention_head_size, self.attention_head_size,)
-                for _ in range((self.num_attention_heads * 4) - 2)
+                for _ in range((self.num_attention_heads * 2) - 2)
             ]
         )
 
@@ -177,10 +177,10 @@ class GlomAttention(nn.Module):
             )
 
         # TODO: try SineActivation()
-        self.activation_from_previous_timestep_same_level = torch.nn.Identity()
+        # self.activation_from_previous_timestep_same_level = torch.nn.Identity()
         self.activation_from_previous_timestep_lower_level = torch.nn.Identity()
         self.activation_from_previous_timestep_higher_level = torch.nn.Identity()
-        self.activation_from_attention_output = torch.nn.Identity()
+        # self.activation_from_attention_output = torch.nn.Identity()
 
         self.attention_temperature = getattr(config, "attention_temperature", 1.0)
 
@@ -299,25 +299,25 @@ class GlomAttention(nn.Module):
         # TODO: optimize
         projected_context_layer_list = []
         for i in range(self.num_attention_heads):
-            x = self.activation_from_attention_output(
-                self.aggr_projections[i * 3](context_layer[:, :, i])
-            )
-            # aggregate with the same, lower and higher level (if available) of previous time step
-            x = x + self.activation_from_previous_timestep_same_level(
-                self.aggr_projections[i * 3 + 1](projected_layer[:, i])
-            )
+            # start aggregation with the attention output
+            x = context_layer[:, :, i]
+            # aggregate that with previous step
+            # from the same level ...
+            x = x + projected_layer[:, i]
             n = 2
+            # ... the lower level ...
             if i > 0:
                 x = x + self.activation_from_previous_timestep_lower_level(
-                    self.aggr_projections[i * 3 - 1](projected_layer[:, i - 1])
+                    self.aggr_projections[i * 2 - 1](projected_layer[:, i - 1])
                 )
                 n += 1
+            # ... and the higher level
             if i < self.num_attention_heads - 1:
                 x = x + self.activation_from_previous_timestep_higher_level(
-                    self.aggr_projections[i * 3 + 2](projected_layer[:, i + 1])
+                    self.aggr_projections[i * 2](projected_layer[:, i + 1])
                 )
                 n += 1
-            # average (TODO: not sure, if this is necessary)
+            # average
             x = x / n
 
             projected_context_layer_list.append(x)
