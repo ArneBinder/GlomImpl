@@ -178,8 +178,8 @@ class GlomAttention(nn.Module):
 
         # TODO: try SineActivation()
         # self.activation_from_previous_timestep_same_level = torch.nn.Identity()
-        self.activation_from_previous_timestep_lower_level = torch.nn.Identity()
-        self.activation_from_previous_timestep_higher_level = torch.nn.Identity()
+        self.activation_from_previous_timestep_lower_level = SineActivation()
+        self.activation_from_previous_timestep_higher_level = SineActivation()
         # self.activation_from_attention_output = torch.nn.Identity()
 
         self.attention_temperature = getattr(config, "attention_temperature", 1.0)
