@@ -288,7 +288,7 @@ class GlomAttention(nn.Module):
         self.aggr_projections = nn.ModuleList(
             [
                 nn.Linear(self.attention_head_size, self.attention_head_size,)
-                for _ in range((self.num_attention_heads * 3) - 2)
+                for _ in range((self.num_attention_heads * 4) - 2)
             ]
         )
 
@@ -422,12 +422,19 @@ class GlomAttention(nn.Module):
         # TODO: optimize
         projected_context_layer_list = []
         for i in range(self.num_attention_heads):
-            # aggregate with the lower and higher "layer" (if available)
             x = self.aggr_projections[i * 3](context_layer[:, :, i])
+            # aggregate with the same, lower and higher level (if available) of previous time step
+            x = x + self.aggr_projections[i * 3 + 1](projected_layer[:, i])
+            n = 1
             if i > 0:
-                x = x + self.aggr_projections[i * 3 - 1](context_layer[:, :, i - 1])
+                x = x + self.aggr_projections[i * 3 - 1](projected_layer[:, i - 1])
+                n += 1
             if i < self.num_attention_heads - 1:
-                x = x + self.aggr_projections[i * 3 + 1](context_layer[:, :, i + 1])
+                x = x + self.aggr_projections[i * 3 + 2](projected_layer[:, i + 1])
+                n += 1
+            # average (TODO: not sure, if this is necessary)
+            x = x / n
+
             projected_context_layer_list.append(x)
         # Should find a better way to do this
         b = self.dense.bias.to(context_layer.dtype)
