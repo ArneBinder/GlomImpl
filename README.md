@@ -59,4 +59,4 @@ perplexity after **12 minutes** of training (same amount of data as above): 738.
 ![glom_albert_comparison_loss](images/WandB_2.3.2021_04-14-07_loss.png)
 ![glom_albert_comparison_flos](images/WandB_2.3.2021_04-14-07_flos.png)
 
-![glom_albert_comparison_loss_long_run](images/wandb_comparison_long-run_loss.png)
+![glom_albert_comparison_loss_long_run](images/wandb_comparison_long-run_loss.svg)
