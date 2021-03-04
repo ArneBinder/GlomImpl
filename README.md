@@ -6,10 +6,10 @@ This is a simple implementation of the GLOM model ([paper](https://arxiv.org/pdf
 
 ## Approach
 * use t **transformer layers** (t=number of **GLOM time steps** you want to model)
-* use L **attention heads** (L=number of **GLOM layers** you want to model)
+* use L **attention heads** (L=number of **GLOM levels** you want to model)
 * apply these small modifications to the ALBERT model:
 	1) remove the linear projections for query, key, value; just pass through `[(d/L)*i..(d/L)*(i+1)]` to the i'th head
-	2) modify/constrain the dense layer that follows the attention in a way that each partition `[(d/L)*i..(d/L)*(i+1)]` of its output is only constructed by the output of the (i-1)-th, the i-th, and the (i+1)-th head (this models the access to the lower and higher GLOM "layer")
+	2) modify/constrain the dense layer that follows the attention in a way that each partition `[(d/L)*i..(d/L)*(i+1)]` of its output is only constructed by the output of the (i-1)-th, the i-th, and the (i+1)-th head (this models the access to the lower and higher GLOM levels)
 	3) remove the skip connection(s) and the MLP that sits on top of the attention layer
 
 
