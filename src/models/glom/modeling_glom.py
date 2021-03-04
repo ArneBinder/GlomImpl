@@ -268,6 +268,15 @@ class GlomEmbeddings(nn.Module):
         return embeddings
 
 
+class SineActivation(nn.Module):
+    def __init__(self, w0=1.0):
+        super().__init__()
+        self.w0 = w0
+
+    def forward(self, x):
+        return torch.sin(self.w0 * x)
+
+
 class GlomAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -310,6 +319,9 @@ class GlomAttention(nn.Module):
             self.distance_embedding = nn.Embedding(
                 2 * config.max_position_embeddings - 1, self.attention_head_size
             )
+
+        self.activation_from_previous_timestep = torch.nn.Identity()  # SineActivation()
+        self.activation_from_attention_output = torch.nn.Identity()
 
     # Copied from transformers.models.bert.modeling_bert.BertSelfAttention.transpose_for_scores
     def transpose_for_scores(self, x):
@@ -422,15 +434,23 @@ class GlomAttention(nn.Module):
         # TODO: optimize
         projected_context_layer_list = []
         for i in range(self.num_attention_heads):
-            x = self.aggr_projections[i * 3](context_layer[:, :, i])
+            x = self.activation_from_attention_output(
+                self.aggr_projections[i * 3](context_layer[:, :, i])
+            )
             # aggregate with the same, lower and higher level (if available) of previous time step
-            x = x + self.aggr_projections[i * 3 + 1](projected_layer[:, i])
-            n = 1
+            x = x + self.activation_from_previous_timestep(
+                self.aggr_projections[i * 3 + 1](projected_layer[:, i])
+            )
+            n = 2
             if i > 0:
-                x = x + self.aggr_projections[i * 3 - 1](projected_layer[:, i - 1])
+                x = x + self.activation_from_previous_timestep(
+                    self.aggr_projections[i * 3 - 1](projected_layer[:, i - 1])
+                )
                 n += 1
             if i < self.num_attention_heads - 1:
-                x = x + self.aggr_projections[i * 3 + 2](projected_layer[:, i + 1])
+                x = x + self.activation_from_previous_timestep(
+                    self.aggr_projections[i * 3 + 2](projected_layer[:, i + 1])
+                )
                 n += 1
             # average (TODO: not sure, if this is necessary)
             x = x / n
