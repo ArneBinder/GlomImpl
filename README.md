@@ -11,6 +11,7 @@ This is a simple implementation of the GLOM model ([paper](https://arxiv.org/pdf
 	1) remove the linear projections for query, key, value; just pass through `[(d/L)*i..(d/L)*(i+1)]` to the i'th head
 	2) modify/constrain the dense layer that follows the attention in a way that each partition `[(d/L)*i..(d/L)*(i+1)]` of its output is only constructed by the output of the (i-1)-th, the i-th, and the (i+1)-th head (this models the access to the lower and higher GLOM levels)
 	3) remove the skip connection(s) and the MLP that sits on top of the attention layer
+	4) for masked language model training: project the input token embedding only to `[0..(d/L)]` (the first level). Also, only take these dimensions from the final hidden state to predict the masked token. All other dimensions get a (position independent, but level dependent) bias as zero-timestep-input.
 
 
 ## Getting Started
